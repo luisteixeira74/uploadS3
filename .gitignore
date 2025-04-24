@@ -1,0 +1,33 @@
+# Diretórios e arquivos gerados pelo Go
+/bin/
+/build/
+
+/# Dependências vendidas
+/vendor/
+
+# Arquivos do Go Workspace
+*.exe
+*.test
+*.out
+
+# Arquivos de logs
+*.log
+
+# Arquivos de IDE
+.idea/
+.vscode/
+
+# Arquivos temporários criados por editores de texto
+*~
+
+# Arquivos de configuração do GoLand, IntelliJ, etc.
+*.iml
+
+# Arquivos de credenciais
+.env
+.aws/
+
+# Arquivos de backup e temporários
+*~ 
+*.bak
+*.swp

@@ -1,0 +1,180 @@
+**Simulado de Entrevista: Desenvolvedor Go Pleno/Sênior - Projeto de Upload para S3**
+
+---
+
+### 🌟 Descrição Geral do Projeto
+
+O código em análise implementa um sistema concorrente para upload de arquivos de um diretório local para um bucket na Amazon S3. Ele inclui:
+
+- Leitura sequencial de arquivos em um diretório (`./tmp`);
+- Upload concorrente com limite de 100 uploads simultâneos;
+- Controle de goroutines com `sync.WaitGroup`;
+- Canal de erros com reprocessamento automático dos arquivos que falharem;
+- Uso do AWS SDK para Go.
+
+---
+
+## 🔎 Parte 1: Compreensão Geral do Código
+
+1. **Explique como funciona o controle de concorrência nesse programa.**
+2. **Qual é o papel do canal `uploadControl <- struct{}{}` antes de iniciar cada upload?**
+3. **Por que usamos `WaitGroup` nesse contexto? O que poderia acontecer se omitíssemos?**
+4. **O que `filepath.Base(fullPath)` está resolvendo nesse código?**
+
+---
+
+## 🚨 Parte 2: Resiliência, Erros e Boas Práticas
+
+5. **Explique como o reprocessamento de arquivos com erro está funcionando.**
+6. **Existe risco de deadlock ou goroutines vazando? Como você garantiria o fechamento adequado dos canais?**
+7. **A função `uploadFile` chama `wg.Done()`, mas também é chamada dentro de uma goroutine com outro `defer wg.Done()`. Isso está correto?**
+
+---
+
+## 📊 Parte 3: Design e Arquitetura
+
+8. **Como você refatoraria esse projeto para algo mais testável e orientado a serviços?**
+9. **Existe alguma vantagem/desvantagem em usar `ReadDir(1)` ao invés de `os.ReadDir()`?**
+10. **Como esse código se comportaria com milhares de arquivos ou múltiplos diretórios? Que ajustes seriam necessários?**
+
+---
+
+## 💡 Parte 4: Conhecimento Avançado
+
+11. **Como você adicionaria suporte a backoff exponencial nas tentativas de reenvio?**
+12. **Como permitir que os arquivos sejam salvos no S3 com caminho completo (subpastas) em vez de apenas o nome?**
+13. **Esse código é seguro para execução em ambientes como Kubernetes? Por quê?**
+14. **Onde você adicionaria métricas Prometheus para monitorar performance e erros?**
+
+---
+
+## 🔬 Parte 5: Testabilidade
+
+15. **Como você testaria a função `uploadFile` de forma unitária?**
+16. **Usar `os.Getenv` no `init()` é uma boa prática em ambientes produtivos? O que você sugere?**
+
+---
+
+Este roteiro cobre os principais pontos que recrutadores ou tech leads podem explorar em uma entrevista de nível pleno/sênior envolvendo concorrência, AWS S3, boas práticas Go e design robusto de sistemas.
+
+Proposta de nova estrutura clean, focada em testes, manutenibilidade e pronta para crescer. Abaixo está um esboço de estrutura com comentários explicativos:
+
+bash
+Copiar
+Editar
+/s3uploader                <- pasta raiz do projeto
+├── /cmd
+│   └── /uploader          <- ponto de entrada
+│       └── main.go        <- instancia o uploader e chama o Start()
+│
+├── /internal
+│   └── /uploader          <- lógica principal de upload
+│       ├── uploader.go    <- interface e implementação do uploader
+│       └── s3.go          <- implementação do S3Uploader
+│
+├── /pkg
+│   └── /awsclient         <- abstração do client AWS (opcional)
+│       └── client.go      <- cria o *s3.S3
+│
+├── /tmp                  <- pasta com arquivos de exemplo (ignorável no versionamento)
+│
+├── go.mod
+└── go.sum
+Arquivos principais
+internal/uploader/uploader.go
+
+package uploader
+
+type Uploader interface {
+	UploadFile(path string) error
+}
+
+internal/uploader/s3.go
+
+package uploader
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/aws"
+)
+
+type S3Uploader struct {
+	client *s3.S3
+	bucket string
+}
+
+func NewS3Uploader(client *s3.S3, bucket string) *S3Uploader {
+	return &S3Uploader{client: client, bucket: bucket}
+}
+
+func (u *S3Uploader) UploadFile(path string) error {
+	filename := filepath.Base(path)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = u.client.PutObject(&s3.PutObjectInput{
+		Bucket: aws.String(u.bucket),
+		Key:    aws.String(filename),
+		Body:   file,
+	})
+	return err
+}
+
+cmd/uploader/main.go
+
+package main
+
+import (
+	"log"
+	"os"
+	"s3uploader/internal/uploader"
+	"s3uploader/pkg/awsclient"
+)
+
+func main() {
+	s3Client := awsclient.New() // cria cliente S3 com config
+	u := uploader.NewS3Uploader(s3Client, os.Getenv("S3_BUCKET_NAME"))
+
+	// Daqui você pode montar sua lógica de upload com goroutines, canais, etc
+	err := u.UploadFile("./tmp/exemplo.txt")
+	if err != nil {
+		log.Fatalf("erro ao subir arquivo: %s", err)
+	}
+}
+
+
+pkg/awsclient/client.go (opcional)
+
+package awsclient
+
+import (
+	"os"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+)
+
+func New() *s3.S3 {
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("us-east-1"),
+		Credentials: credentials.NewStaticCredentials(
+			os.Getenv("AWS_ACCESS_KEY_ID"),
+			os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			"",
+		),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return s3.New(sess)
+}

@@ -77,3 +77,23 @@ Este projeto é ideal para praticar:
 - Concorrência com goroutines e canais em Go
 - Integração com AWS SDK
 - Tratamento de erros e retry resiliente
+
+## ToDo
+
+> Tratar erro com log.Fatalf() ao invés de panic (melhor logging)
+
+> Verificar variáveis de ambiente vazias e dar mensagens úteis ao usuário
+
+> Adicionar contagem de tentativas para evitar retry infinito
+
+> Melhor log de erro com contexto (arquivo, erro, tentativa)
+
+> Mover wg.Add(1) para dentro da goroutine uploadFile por consistência
+
+> Colocar verificação se o item é arquivo, não diretório (IsDir())
+
+> Separar esse código em pacotes modulares
+
+> Adicionar testes básicos com mocks
+
+> Incluir observabilidade (logs/metrics) para produção

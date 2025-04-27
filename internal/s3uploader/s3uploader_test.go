@@ -2,51 +2,67 @@ package s3uploader
 
 import (
 	"io"
-	"sync"
+	"os"
 	"testing"
 
 	"github.com/luisteixeira74/uploadS3/internal/uploader"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/suite"
 )
 
-var wg sync.WaitGroup
+type TestUploadFileSuite struct {
+	suite.Suite
+	mockUploader *MockUploader
+}
 
-// MockUploader simula a interface Uploader
 type MockUploader struct {
 	mock.Mock
 }
 
-// Alteração do tipo do parâmetro de io.Reader para io.ReadSeeker
 func (m *MockUploader) Upload(filename string, body io.ReadSeeker) error {
 	args := m.Called(filename, body)
 	return args.Error(0)
 }
 
-// TestUploadFileSuccess testa um upload bem-sucedido
-func TestUploadFileSuccess(t *testing.T) {
-	m := new(MockUploader)
-	m.On("Upload", "test.txt", mock.Anything).Return(nil)
+func (suite *TestUploadFileSuite) SetupTest() {
+	// Setup comum para todos os testes (se necessário)
+	suite.mockUploader = new(MockUploader)
+}
 
+func (suite *TestUploadFileSuite) TestUploadFileSuccess() {
+	suite.mockUploader.On("Upload", "test.txt", mock.Anything).Return(nil)
+
+	// Criação de um arquivo de teste
+	file, err := os.Create("/tmp/test.txt")
+	suite.Require().NoError(err)
+
+	defer file.Close()
+	file.WriteString("Test file content")
+
+	// Testando a função de upload
 	uploadControl := make(chan struct{}, 1)
 	errorFileUpload := make(chan string, 1)
 
-	uploadControl <- struct{}{} // simula slot ocupado
+	uploadControl <- struct{}{}
 
-	// Prepara o WaitGroup para aguardar uma goroutine
-	wg.Add(1)
-
-	// Lança a função assíncrona para testar
-	go func() {
-		defer wg.Done() // Garante que o WaitGroup será decrementado após a execução
-		// Chamando a função que você quer testar
-		uploader.UploadFile(m, "testdata/test.txt", uploadControl, errorFileUpload, nil)
-	}()
-
-	// Aguarda a execução das goroutines antes de verificar as asserções
-	wg.Wait()
+	// Chama a função de upload
+	err = uploader.UploadFile(suite.mockUploader, "/tmp/test.txt", uploadControl, errorFileUpload)
+	suite.NoError(err)
 
 	// Asserções
-	m.AssertExpectations(t)
-	assert.Empty(t, errorFileUpload) // Verifica se o canal de erro está vazio (nenhum erro ocorreu)
+	suite.mockUploader.AssertExpectations(suite.T())
+	select {
+	case errFile := <-errorFileUpload:
+		suite.Fail("Não esperava erro de upload, mas recebeu: %s", errFile)
+	default:
+		// Nenhum erro
+	}
+}
+
+func (suite *TestUploadFileSuite) TestUploadFileWithRetry() {
+	// Similar ao primeiro teste, mas com lógica de retry
+}
+
+func TestRunUploadFileSuite(t *testing.T) {
+	suite.Run(t, new(TestUploadFileSuite))
 }

@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
@@ -14,14 +13,21 @@ type Uploader interface {
 	Upload(filename string, body io.ReadSeeker) error
 }
 
-func UploadFile(uploader Uploader, fullPath string, uploadControl chan struct{}, errorFileUpload chan<- string, wg *sync.WaitGroup) {
-	defer wg.Done()
-	defer func() { <-uploadControl }() // libera o slot do canal ao final
+func UploadFile(uploader Uploader, fullPath string, uploadControl chan struct{}, errorFileUpload chan<- string) error {
+	defer func() {
+		if uploadControl != nil {
+			select {
+			case <-uploadControl:
+				// Liberou slot
+			default:
+			}
+		}
+	}()
 
 	filename := filepath.Base(fullPath)
 	fmt.Printf("Uploading file %s started\n", filename)
 
-	const maxRetries = 5 // número máximo de tentativas (retry c/ backoff exponencial)
+	const maxRetries = 2 // número máximo de tentativas (retry c/ backoff exponencial)
 
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -37,7 +43,7 @@ func UploadFile(uploader Uploader, fullPath string, uploadControl chan struct{},
 
 		if err == nil {
 			fmt.Printf("Successfully uploaded %s\n", filename)
-			return
+			return nil
 		}
 
 		fmt.Printf("Erro no upload (%s), tentativa %d de %d: %v\n", filename, attempt+1, maxRetries, err)
@@ -50,4 +56,5 @@ func UploadFile(uploader Uploader, fullPath string, uploadControl chan struct{},
 
 	fmt.Printf("Falha no upload de %s após %d tentativas: %v\n", filename, maxRetries, lastErr)
 	errorFileUpload <- fullPath // envia para reprocessamento
+	return lastErr              // Retorna o erro final para que o código chamador possa tratá-lo
 }

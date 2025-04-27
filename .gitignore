@@ -1,3 +1,6 @@
+# arquivos vazios para testar upload
+/tmp/*
+
 # Diretórios e arquivos gerados pelo Go
 /bin/
 /build/

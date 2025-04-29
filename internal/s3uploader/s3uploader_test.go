@@ -33,7 +33,7 @@ func (suite *TestUploadFileSuite) TestUploadFileSuccess() {
 	suite.mockUploader.On("Upload", "test.txt", mock.Anything).Return(nil)
 
 	// Criação de um arquivo de teste
-	file, err := os.Create("/tmp/test.txt")
+	file, err := os.Create("../../tmp/test.txt")
 	suite.Require().NoError(err)
 
 	defer file.Close()
@@ -46,7 +46,7 @@ func (suite *TestUploadFileSuite) TestUploadFileSuccess() {
 	uploadControl <- struct{}{}
 
 	// Chama a função de upload
-	err = uploader.UploadFile(suite.mockUploader, "/tmp/test.txt", uploadControl, errorFileUpload)
+	err = uploader.UploadFile(suite.mockUploader, "../../tmp/test.txt", uploadControl, errorFileUpload)
 	suite.NoError(err)
 
 	// Asserções
